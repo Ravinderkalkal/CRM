@@ -1,4 +1,5 @@
-name: CRM - CI and ACR Pipeline
+
+name: CRM - CI and AKS Deployment
 
 on:
   push:
@@ -13,53 +14,72 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  DOTNET_VERSION: "10.0.x"
+  IMAGE_NAME: crm
+
 jobs:
-  build-test-docker:
-    name: Build, Test and Docker
+  build-test-deploy:
+    name: Build, Test, Push and Deploy
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Download the repository source code
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Setup .NET 10 SDK
+      # 2. Install .NET 10 SDK
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Display .NET version
         run: dotnet --version
 
-      - name: Restore CRM dependencies
+      # 3. Restore NuGet packages
+      - name: Restore dependencies
         run: dotnet restore CRM/CRM.csproj
 
+      # 4. Compile the application
       - name: Build CRM
         run: dotnet build CRM/CRM.csproj --configuration Release --no-restore
 
-      - name: Run tests if test projects exist
+      # 5. Run separate test projects, if present
+      - name: Run automated tests
         shell: bash
         run: |
-          mapfile -t tests < <(find . -type f \
-            \( -name '*Tests.csproj' -o -name '*Test.csproj' \) \
-            -not -path '*/obj/*' \
-            -not -path '*/bin/*' | sort)
+          mapfile -t tests < <(
+            find . -type f \
+              \( -name '*Tests.csproj' -o -name '*Test.csproj' \) \
+              -not -path '*/obj/*' \
+              -not -path '*/bin/*' | sort
+          )
 
-          if [ ${#tests[@]} -eq 0 ]; then
-            echo "No separate test project found. Skipping automated tests."
+          if [ "${#tests[@]}" -eq 0 ]; then
+            echo "No separate test project found; skipping tests."
           else
             for test_project in "${tests[@]}"; do
+              echo "Running tests: $test_project"
               dotnet test "$test_project" \
                 --configuration Release
             done
           fi
 
+      # 6. Build the Docker image
       - name: Build Docker image
-        run: docker build --tag crm:${{ github.sha }} .
+        run: |
+          docker build \
+            --file Dockerfile \
+            --tag "${IMAGE_NAME}:${GITHUB_SHA}" \
+            .
 
       - name: Verify Docker image
-        run: docker image inspect crm:${{ github.sha }}
+        run: docker image inspect "${IMAGE_NAME}:${GITHUB_SHA}"
 
-      - name: Login to Azure using OIDC
+      # Do not deploy pull requests. Deploy only from main.
+      # 7. Authenticate to Azure using GitHub OIDC
+      - name: Login to Azure
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: azure/login@v2
         with:
@@ -67,59 +87,72 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      # 8. Authenticate to Azure Container Registry
       - name: Login to ACR
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        env:
-          ACR_NAME: ${{ vars.ACR_NAME }}
-        run: az acr login --name "$ACR_NAME"
+        run: az acr login --name "${{ vars.ACR_NAME }}"
 
-      - name: Tag Docker image for ACR
+      # 9. Tag the image with the commit SHA and latest
+      - name: Tag Docker image
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           ACR_NAME: ${{ vars.ACR_NAME }}
         run: |
-          docker tag crm:${{ github.sha }} \
-            "$ACR_NAME.azurecr.io/crm:${{ github.sha }}"
+          docker tag "${IMAGE_NAME}:${GITHUB_SHA}" \
+            "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${GITHUB_SHA}"
 
-          docker tag crm:${{ github.sha }} \
-            "$ACR_NAME.azurecr.io/crm:latest"
+          docker tag "${IMAGE_NAME}:${GITHUB_SHA}" \
+            "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:latest"
 
-      - name: Push Docker image to ACR
+      # 10. Push both tags to ACR
+      - name: Push image to ACR
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           ACR_NAME: ${{ vars.ACR_NAME }}
         run: |
-          docker push "$ACR_NAME.azurecr.io/crm:${{ github.sha }}"
-          docker push "$ACR_NAME.azurecr.io/crm:latest"
+          docker push "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${GITHUB_SHA}"
+          docker push "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:latest"
 
-       - name: Install kubelogin
+      # 11. Install kubelogin.
+      # Supplying GITHUB_TOKEN fixes the missing-token error.
+      - name: Install kubelogin
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: azure/use-kubelogin@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          kubelogin-version: 'latest'
+          kubelogin-version: latest
 
+      # 12. Connect kubectl to the AKS cluster
       - name: Set AKS context
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: azure/aks-set-context@v4
         with:
           resource-group: ${{ vars.AKS_RESOURCE_GROUP }}
           cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
-          admin: 'false'
-          use-kubelogin: 'true'
+          admin: "false"
+          use-kubelogin: "true"
 
+      # 13. Install kubectl
       - name: Install kubectl
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: azure/setup-kubectl@v4
 
-      - name: Use this commit's Docker image
+      # 14. Set the manifest to use this exact commit's image
+      - name: Configure deployment image
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
         shell: bash
         run: |
-          sed -i "s|acrcrmdev2026.azurecr.io/crm:latest|acrcrmdev2026.azurecr.io/crm:${GITHUB_SHA}|g" \
+          sed -i \
+            "s|acrcrmdev2026.azurecr.io/crm:latest|${ACR_NAME}.azurecr.io/crm:${GITHUB_SHA}|g" \
             k8s/deployment.yaml
 
+          echo "Deployment image:"
+          grep 'image:' k8s/deployment.yaml
+
+      # 15. Create the namespace and apply Kubernetes resources
       - name: Deploy CRM to AKS
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
@@ -127,9 +160,19 @@ jobs:
           kubectl apply -f k8s/deployment.yaml
           kubectl apply -f k8s/service.yaml
 
-      - name: Verify CRM rollout
+      # 16. Wait for the application rollout
+      - name: Verify deployment
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
-          kubectl rollout status deployment/crm -n crm --timeout=180s
-          kubectl get pods -n crm
+          kubectl rollout status deployment/crm \
+            --namespace crm \
+            --timeout=180s
+
+          echo "---- Pods ----"
+          kubectl get pods -n crm -o wide
+
+          echo "---- Deployment ----"
+          kubectl get deployment crm -n crm
+
+          echo "---- Service ----"
           kubectl get service crm-service -n crm
