@@ -1,0 +1,60 @@
+
+name: CRM - CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-docker:
+    name: Build, Test and Docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Display .NET version
+        run: dotnet --version
+
+      - name: Restore CRM dependencies
+        run: dotnet restore CRM/CRM.csproj
+
+      - name: Build CRM
+        run: dotnet build CRM/CRM.csproj --configuration Release --no-restore
+
+      - name: Run tests if test projects exist
+        shell: bash
+        run: |
+          mapfile -t tests < <(find . -type f \
+            \( -name '*Tests.csproj' -o -name '*Test.csproj' \) \
+            -not -path '*/obj/*' \
+            -not -path '*/bin/*' | sort)
+
+          if [ ${#tests[@]} -eq 0 ]; then
+            echo "No separate test project found. Skipping automated tests."
+          else
+            for test_project in "${tests[@]}"; do
+              dotnet test "$test_project" \
+                --configuration Release
+            done
+          fi
+
+      - name: Build Docker image
+        run: docker build --tag crm:${{ github.sha }} .
+
+      - name: Verify Docker image
+        run: docker image inspect crm:${{ github.sha }}
