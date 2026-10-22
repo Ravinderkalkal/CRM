@@ -1,0 +1,557 @@
+﻿@{
+    ViewData["Title"] = "Dashboard";
+    Layout = null;
+
+    var books = new[]
+    {
+        new { Title = "Clean Code", Author = "Robert C. Martin", Price = 499, Rating = 4.8, Image = "https://covers.openlibrary.org/b/isbn/9780132350884-M.jpg" },
+        new { Title = "Design Patterns", Author = "Erich Gamma", Price = 699, Rating = 4.8, Image = "https://covers.openlibrary.org/b/isbn/9780201633610-M.jpg" },
+        new { Title = "The Pragmatic Programmer", Author = "Andrew Hunt", Price = 599, Rating = 4.7, Image = "https://covers.openlibrary.org/b/isbn/9780135957059-M.jpg" },
+        new { Title = "Atomic Habits", Author = "James Clear", Price = 399, Rating = 4.9, Image = "https://covers.openlibrary.org/b/isbn/9780735211292-M.jpg" },
+        new { Title = "Deep Work", Author = "Cal Newport", Price = 449, Rating = 4.5, Image = "https://covers.openlibrary.org/b/isbn/9781455586691-M.jpg" }
+    };
+
+    var orders = new[]
+    {
+        new { Customer = "Rohit Sharma", Book = "Clean Code", Price = 499, Status = "Delivered", Date = "12 Oct 2026" },
+        new { Customer = "Priya Singh", Book = "Design Patterns", Price = 699, Status = "Processing", Date = "10 Oct 2026" },
+        new { Customer = "Amit Kumar", Book = "The Pragmatic Programmer", Price = 599, Status = "Shipped", Date = "08 Oct 2026" },
+        new { Customer = "Neha Gupta", Book = "Atomic Habits", Price = 399, Status = "Delivered", Date = "05 Oct 2026" }
+    };
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BookStore | Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+            :root {
+                --navy: #172941;
+                --blue: #1769e8;
+                --page: #f4f7fb;
+                --muted: #74839c;
+            }
+
+            * { box-sizing: border-box; }
+            body {
+                margin: 0;
+                background: var(--page);
+                color: #192b48;
+                font-family: Inter, "Segoe UI", Arial, sans-serif;
+            }
+
+            .sidebar {
+                width: 245px;
+                background: linear-gradient(180deg, #192b45, #1b2d49);
+                color: white;
+                position: fixed;
+                inset: 0 auto 0 0;
+                padding: 25px 13px;
+                z-index: 1000;
+            }
+
+            .brand {
+                font-size: 24px;
+                font-weight: 750;
+                margin: 0 8px 30px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .brand i { color: #82b4ff; font-size: 29px; }
+            .nav-link {
+                color: #d7e0ee;
+                padding: 13px 14px;
+                margin-bottom: 5px;
+                border-radius: 9px;
+                display: flex;
+                align-items: center;
+                gap: 13px;
+                cursor: pointer;
+                text-decoration: none;
+            }
+
+            .nav-link:hover, .nav-link.active {
+                background: var(--blue);
+                color: white;
+            }
+
+            .nav-link i { font-size: 18px; }
+            .sidebar-divider { border-color: #40516b; margin: 22px 5px; }
+
+            .main { margin-left: 245px; min-height: 100vh; }
+            .topbar {
+                height: 66px;
+                padding: 0 28px;
+                background: white;
+                border-bottom: 1px solid #e9eef5;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+            }
+
+            .search { max-width: 390px; width: 100%; position: relative; }
+            .search input {
+                width: 100%;
+                border: 1px solid #dce4ef;
+                border-radius: 9px;
+                padding: 10px 38px 10px 13px;
+                outline: none;
+            }
+            .search input:focus { border-color: var(--blue); }
+            .search i { position: absolute; right: 13px; top: 12px; color: var(--muted); }
+
+            .content { padding: 25px 28px; max-width: 1800px; margin: auto; }
+            .page-title { font-size: 28px; font-weight: 750; margin-bottom: 5px; }
+            .muted { color: var(--muted); }
+            .panel {
+                background: white;
+                border: 1px solid #edf0f5;
+                border-radius: 12px;
+                padding: 20px;
+                box-shadow: 0 3px 12px rgba(25, 43, 72, .035);
+                height: 100%;
+            }
+
+            .stat-card {
+                display: flex;
+                align-items: flex-start;
+                gap: 15px;
+                padding: 21px 19px;
+            }
+            .stat-icon {
+                width: 47px;
+                height: 47px;
+                flex-shrink: 0;
+                border-radius: 10px;
+                display: grid;
+                place-items: center;
+                color: white;
+                font-size: 21px;
+            }
+            .blue { background: #1769e8; }
+            .green { background: #10b981; }
+            .purple { background: #8152df; }
+            .orange { background: #f59e0b; }
+            .stat-label { font-size: 14px; color: #64748b; }
+            .stat-number { font-size: 28px; font-weight: 750; margin: 5px 0; }
+            .trend { font-size: 12px; color: #059669; }
+
+            .section-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+            .order-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto auto;
+                gap: 12px;
+                align-items: center;
+                padding: 14px 0;
+                border-bottom: 1px solid #edf1f6;
+            }
+            .order-row:last-child { border-bottom: 0; }
+            .status {
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 650;
+            }
+            .Delivered { color: #047857; background: #d9f8e9; }
+            .Processing { color: #1d4ed8; background: #e0ecff; }
+            .Shipped { color: #b45309; background: #fff0d2; }
+
+            .book-grid {
+                display: grid;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                gap: 12px;
+            }
+            .book-card {
+                border: 1px solid #edf0f5;
+                border-radius: 10px;
+                padding: 13px;
+                min-width: 0;
+                transition: transform .2s, box-shadow .2s;
+            }
+            .book-card:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 8px 22px #17294112;
+            }
+            .book-cover {
+                height: 135px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 12px;
+            }
+            .book-cover img {
+                max-width: 100%;
+                height: 135px;
+                object-fit: contain;
+            }
+            .book-title { font-weight: 700; font-size: 13px; line-height: 1.4; }
+            .book-author {
+                color: var(--muted);
+                font-size: 11px;
+                margin: 5px 0;
+            }
+            .book-price { font-size: 17px; font-weight: 750; margin: 7px 0; }
+            .rating { font-size: 12px; color: #f59e0b; }
+            .rating span { color: #64748b; }
+            .btn-primary { background: var(--blue); border-color: var(--blue); }
+            .btn-primary:hover { background: #1055c4; }
+            .quick-link {
+                display: flex;
+                gap: 12px;
+                align-items: center;
+                padding: 12px 0;
+                color: inherit;
+                text-decoration: none;
+            }
+            .quick-link:hover { color: var(--blue); }
+            .quick-icon {
+                width: 39px; height: 39px; border-radius: 9px;
+                display: grid; place-items: center; color: white; font-size: 18px;
+            }
+            footer { border-top: 1px solid #e7edf5; padding: 20px 28px; color: var(--muted); font-size: 12px; }
+            .mobile-menu { display: none; }
+
+            @@media (max-width: 1200px) {
+                .book-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            }
+            @@media (max-width: 768px) {
+                .sidebar { width: 245px; transform: translateX(-100%); transition: transform .2s; }
+                .sidebar.open { transform: translateX(0); }
+                .main { margin-left: 0; }
+                .topbar { padding: 0 15px; }
+                .content { padding: 20px 14px; }
+                .mobile-menu { display: inline-block; }
+                .book-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                .order-row { grid-template-columns: 1fr auto; }
+                .order-price { display: none; }
+            }
+            @@media (max-width: 390px) {
+                .book-grid { grid-template-columns: 1fr 1fr; gap: 7px; }
+                .panel { padding: 13px; }
+            }
+    </style>
+</head>
+
+<body>
+    <aside class="sidebar" id="sidebar">
+        <div class="brand"><i class="bi bi-book-half"></i> BookStore</div>
+
+        <nav>
+            <a class="nav-link active" href="#dashboard" data-section="dashboard"><i class="bi bi-house-door-fill"></i> Dashboard</a>
+            <a class="nav-link" href="#products" data-section="products"><i class="bi bi-book-half"></i> Products</a>
+            <a class="nav-link" href="#orders" data-section="orders"><i class="bi bi-basket3-fill"></i> Orders</a>
+            <a class="nav-link" href="#users" data-section="users"><i class="bi bi-people-fill"></i> Users</a>
+            <a class="nav-link" href="#categories" data-section="categories"><i class="bi bi-grid-fill"></i> Categories</a>
+        </nav>
+
+        <hr class="sidebar-divider">
+        <a class="nav-link" href="#profile" data-section="profile"><i class="bi bi-person-fill"></i> Profile</a>
+        <a class="nav-link" href="#logout" id="logoutLink"><i class="bi bi-box-arrow-right"></i> Logout</a>
+        <div class="small text-white-50 mt-5 px-2">BookStore Demo v1.0</div>
+    </aside>
+
+    <main class="main" id="dashboard">
+        <header class="topbar">
+            <div class="d-flex align-items-center gap-3 flex-grow-1">
+                <button class="btn btn-light mobile-menu" id="menuToggle" aria-label="Toggle menu"><i class="bi bi-list fs-5"></i></button>
+                <div class="search">
+                    <input type="search" id="searchInput" placeholder="Search books or customers..." aria-label="Search dashboard">
+                    <i class="bi bi-search"></i>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-light position-relative" aria-label="Shopping cart">
+                    <i class="bi bi-cart3 fs-5"></i>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">3</span>
+                </button>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="rounded-circle bg-primary text-white d-grid" style="width:36px;height:36px;place-items:center">R</div>
+                    <span class="fw-semibold d-none d-sm-inline">Ravinder</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="mb-4">
+                <h1 class="page-title" id="welcomeTitle">Dashboard</h1>
+                <p class="muted mb-0" id="welcomeSubtitle">Welcome back, Ravinder! Here's what's happening with your store today.</p>
+            </div>
+
+            <div class="row g-3 mb-4" id="stats">
+                <div class="col-6 col-xl-3">
+                    <div class="panel stat-card">
+                        <div class="stat-icon blue"><i class="bi bi-book-fill"></i></div>
+                        <div><div class="stat-label">Total Books</div><div class="stat-number">24</div><div class="trend"><i class="bi bi-arrow-up"></i> 12% <span class="muted">vs last month</span></div></div>
+                    </div>
+                </div>
+                <div class="col-6 col-xl-3">
+                    <div class="panel stat-card">
+                        <div class="stat-icon green"><i class="bi bi-cart-fill"></i></div>
+                        <div><div class="stat-label">Total Orders</div><div class="stat-number">18</div><div class="trend"><i class="bi bi-arrow-up"></i> 25% <span class="muted">vs last month</span></div></div>
+                    </div>
+                </div>
+                <div class="col-6 col-xl-3">
+                    <div class="panel stat-card">
+                        <div class="stat-icon purple"><i class="bi bi-people-fill"></i></div>
+                        <div><div class="stat-label">Total Users</div><div class="stat-number">12</div><div class="trend"><i class="bi bi-arrow-up"></i> 20% <span class="muted">vs last month</span></div></div>
+                    </div>
+                </div>
+                <div class="col-6 col-xl-3">
+                    <div class="panel stat-card">
+                        <div class="stat-icon orange"><i class="bi bi-currency-rupee"></i></div>
+                        <div><div class="stat-label">Total Revenue</div><div class="stat-number">₹8,420</div><div class="trend"><i class="bi bi-arrow-up"></i> 18% <span class="muted">vs last month</span></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-xl-7" id="salesPanel">
+                    <section class="panel">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div><h2 class="section-title">Sales Overview</h2><p class="muted small mb-0">Monthly revenue (₹)</p></div>
+                            <select class="form-select form-select-sm" id="chartPeriod" style="width:auto" aria-label="Chart period">
+                                <option value="6">Last 6 Months</option>
+                                <option value="3">Last 3 Months</option>
+                            </select>
+                        </div>
+                        <div style="height:260px"><canvas id="salesChart" aria-label="Monthly sales chart"></canvas></div>
+                    </section>
+                </div>
+
+                <div class="col-xl-5" id="orders">
+                    <section class="panel">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h2 class="section-title">Recent Orders</h2>
+                            <button class="btn btn-link btn-sm text-decoration-none" data-section="orders">View All</button>
+                        </div>
+                        <div id="orderList">
+                            @foreach (var order in orders)
+                            {
+                                <div class="order-row searchable-order">
+                                    <div>
+                                        <div class="fw-semibold small order-book">@order.Book</div>
+                                        <div class="muted small">@order.Customer</div>
+                                    </div>
+                                    <span class="status @order.Status">@order.Status</span>
+                                    <div class="text-end order-price">
+                                        <div class="fw-semibold small">₹@order.Price</div>
+                                        <div class="muted" style="font-size:11px">@order.Date</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-xl-9" id="products">
+                    <section class="panel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="section-title">Featured Books</h2>
+                            <button class="btn btn-link btn-sm text-decoration-none" data-section="products">View All</button>
+                        </div>
+                        <div class="book-grid" id="bookGrid">
+                            @foreach (var book in books)
+                            {
+                                <article class="book-card searchable-book" data-title="@book.Title" data-author="@book.Author">
+                                    <div class="book-cover">
+                                        <img src="@book.Image" alt="@book.Title book cover" loading="lazy"
+                                             onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+                                        <div style="display:none;width:85px;height:125px;background:#e5edfa;color:#23436c;place-items:center;text-align:center;padding:8px;font-weight:700;font-size:12px">@book.Title</div>
+                                    </div>
+                                    <div class="book-title">@book.Title</div>
+                                    <div class="book-author">@book.Author</div>
+                                    <div class="book-price">₹@book.Price</div>
+                                    <div class="rating mb-2">★★★★★ <span>@book.Rating / 5</span></div>
+                                    <button class="btn btn-primary btn-sm w-100 add-cart" data-title="@book.Title">
+                                        <i class="bi bi-cart-plus"></i> Add to Cart
+                                    </button>
+                                </article>
+                            }
+                        </div>
+                        <p id="noBooks" class="text-center muted mt-3 d-none">No matching books found.</p>
+                    </section>
+                </div>
+
+                <div class="col-xl-3">
+                    <section class="panel">
+                        <h2 class="section-title mb-2">Quick Links</h2>
+                        <a href="#products" class="quick-link" data-section="products">
+                            <span class="quick-icon blue"><i class="bi bi-plus-lg"></i></span>
+                            <span><strong class="d-block small">Add New Book</strong><small class="muted">Manage your products</small></span>
+                        </a>
+                        <a href="#orders" class="quick-link" data-section="orders">
+                            <span class="quick-icon green"><i class="bi bi-cart-fill"></i></span>
+                            <span><strong class="d-block small">View Orders</strong><small class="muted">Check customer orders</small></span>
+                        </a>
+                        <a href="#users" class="quick-link" data-section="users">
+                            <span class="quick-icon purple"><i class="bi bi-people-fill"></i></span>
+                            <span><strong class="d-block small">Manage Users</strong><small class="muted">View registered users</small></span>
+                        </a>
+                    </section>
+                </div>
+            </div>
+
+            <div class="alert alert-light border small" id="demoNotice">
+                <i class="bi bi-info-circle text-primary"></i>
+                Demo dashboard — all orders, users, revenue and book data are sample data.
+            </div>
+        </div>
+
+        <footer class="d-flex justify-content-between flex-wrap gap-2">
+            <span>© 2026 BookStore. All rights reserved.</span>
+            <span><a href="#privacy" class="text-secondary me-3">Privacy</a><a href="#terms" class="text-secondary me-3">Terms</a><a href="mailto:demo@example.com" class="text-secondary">Contact</a></span>
+        </footer>
+    </main>
+
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="demoToast" class="toast" role="status" aria-live="polite">
+            <div class="toast-header">
+                <strong class="me-auto">BookStore Demo</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" id="toastMessage">Action completed.</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+            // Demo sales chart
+            const chartLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+            const chartValues = [1800, 3500, 4600, 3700, 6200, 8420];
+
+            const chart = new Chart(document.getElementById("salesChart"), {
+                type: "line",
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: "Revenue",
+                        data: chartValues,
+                        borderColor: "#1769e8",
+                        backgroundColor: "rgba(23, 105, 232, .10)",
+                        fill: true,
+                        tension: .38,
+                        pointRadius: 4,
+                        pointBackgroundColor: "#1769e8"
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: context => " ₹" + context.parsed.y.toLocaleString("en-IN")
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: "#edf1f6" },
+                            ticks: {
+                                callback: value => "₹" + Number(value).toLocaleString("en-IN")
+                            }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            document.getElementById("chartPeriod").addEventListener("change", function () {
+                const count = Number(this.value);
+                chart.data.labels = chartLabels.slice(-count);
+                chart.data.datasets[0].data = chartValues.slice(-count);
+                chart.update();
+            });
+
+            // Search books and orders
+            document.getElementById("searchInput").addEventListener("input", function () {
+                const term = this.value.trim().toLowerCase();
+                let visibleBooks = 0;
+
+                document.querySelectorAll(".searchable-book").forEach(card => {
+                    const match = card.innerText.toLowerCase().includes(term);
+                    card.style.display = match ? "" : "none";
+                    if (match) visibleBooks++;
+                });
+
+                document.getElementById("noBooks").classList.toggle("d-none", visibleBooks !== 0);
+
+                document.querySelectorAll(".searchable-order").forEach(row => {
+                    row.style.display = row.innerText.toLowerCase().includes(term) ? "" : "none";
+                });
+            });
+
+            // Toast helper
+            function showToast(message) {
+                document.getElementById("toastMessage").textContent = message;
+                bootstrap.Toast.getOrCreateInstance(document.getElementById("demoToast")).show();
+            }
+
+            // Cart interactions are for demonstration only
+            let cartCount = 3;
+            document.querySelectorAll(".add-cart").forEach(button => {
+                button.addEventListener("click", function () {
+                    cartCount++;
+                    document.querySelector(".topbar .badge").textContent = cartCount;
+                    showToast(this.dataset.title + " added to your demo cart.");
+                });
+            });
+
+            // Navigation demo
+            document.querySelectorAll("[data-section]").forEach(link => {
+                link.addEventListener("click", function (event) {
+                    const section = this.dataset.section;
+                    if (!section) return;
+                    event.preventDefault();
+
+                    document.querySelectorAll(".sidebar .nav-link").forEach(item => item.classList.remove("active"));
+                    document.querySelector('.sidebar [data-section="' + section + '"]')?.classList.add("active");
+
+                    const titles = {
+                        dashboard: ["Dashboard", "Welcome back, Ravinder! Here's what's happening with your store today."],
+                        products: ["Products", "Browse and search the featured books in your store."],
+                        orders: ["Orders", "Review recent orders and their current statuses."],
+                        users: ["Users", "Demo user overview. User management is not connected yet."],
+                        categories: ["Categories", "Demo category section. Add category management when you connect a backend."],
+                        profile: ["Profile", "Demo profile for Ravinder."]
+                    };
+
+                    const details = titles[section] || ["BookStore", "Demo page"];
+                    document.getElementById("welcomeTitle").textContent = details[0];
+                    document.getElementById("welcomeSubtitle").textContent = details[1];
+
+                    const target = section === "dashboard" ? document.getElementById("dashboard")
+                        : section === "products" ? document.getElementById("products")
+                        : section === "orders" ? document.getElementById("orders")
+                        : document.getElementById("welcomeTitle");
+
+                    target.scrollIntoView({ behavior: "smooth", block: "start" });
+                    document.getElementById("sidebar").classList.remove("open");
+                });
+            });
+
+            document.getElementById("menuToggle").addEventListener("click", () => {
+                document.getElementById("sidebar").classList.toggle("open");
+            });
+
+            document.getElementById("logoutLink").addEventListener("click", function (event) {
+                event.preventDefault();
+                showToast("This is a demo UI. Authentication and logout are not configured.");
+            });
+    </script>
+</body>
+</html>
