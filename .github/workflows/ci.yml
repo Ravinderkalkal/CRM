@@ -92,3 +92,38 @@ jobs:
         run: |
           docker push "$ACR_NAME.azurecr.io/crm:${{ github.sha }}"
           docker push "$ACR_NAME.azurecr.io/crm:latest"
+          
+      - name: Set AKS context
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ vars.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
+          admin: 'false'
+          use-kubelogin: 'true'
+
+      - name: Install kubectl
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: azure/setup-kubectl@v4
+
+      - name: Use this commit's Docker image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          sed -i "s|acrcrmdev2026.azurecr.io/crm:latest|acrcrmdev2026.azurecr.io/crm:${GITHUB_SHA}|g" \
+            k8s/deployment.yaml
+
+      - name: Deploy CRM to AKS
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+      - name: Verify CRM rollout
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          kubectl rollout status deployment/crm -n crm --timeout=180s
+          kubectl get pods -n crm
+          kubectl get service crm-service -n crm
+
