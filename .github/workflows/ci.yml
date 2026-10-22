@@ -1,5 +1,5 @@
 
-name: CRM - CI Pipeline
+name: CRM - CI and ACR Pipeline
 
 on:
   push:
@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build-test-docker:
@@ -58,3 +59,36 @@ jobs:
 
       - name: Verify Docker image
         run: docker image inspect crm:${{ github.sha }}
+
+      - name: Login to Azure using OIDC
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Tag Docker image for ACR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+        run: |
+          docker tag crm:${{ github.sha }} \
+            "$ACR_NAME.azurecr.io/crm:${{ github.sha }}"
+
+          docker tag crm:${{ github.sha }} \
+            "$ACR_NAME.azurecr.io/crm:latest"
+
+      - name: Push Docker image to ACR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+        run: |
+          docker push "$ACR_NAME.azurecr.io/crm:${{ github.sha }}"
+          docker push "$ACR_NAME.azurecr.io/crm:latest"
