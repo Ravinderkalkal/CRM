@@ -156,7 +156,7 @@ jobs:
       - name: Deploy CRM to AKS
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
-          kubectl apply -f k8s/namespace.yaml
+          
           kubectl apply -f k8s/deployment.yaml
           kubectl apply -f k8s/service.yaml
 
