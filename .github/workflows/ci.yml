@@ -92,9 +92,11 @@ jobs:
           docker push "$ACR_NAME.azurecr.io/crm:${{ github.sha }}"
           docker push "$ACR_NAME.azurecr.io/crm:latest"
 
-      - name: Install kubelogin
+       - name: Install kubelogin
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: azure/use-kubelogin@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           kubelogin-version: 'latest'
 
